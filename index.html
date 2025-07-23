@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blacksmith's Forge: An Idle Empire</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=MedievalSharp&family=Roboto:wght@400;500;700&display=swap');
+      body {
+        font-family: 'Roboto', sans-serif;
+      }
+      .font-medieval {
+        font-family: 'MedievalSharp', cursive;
+      }
+      @keyframes bob {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-8px); }
+      }
+      .animate-bob { animation: bob 3s ease-in-out infinite; }
+      
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+        20%, 40%, 60%, 80% { transform: translateX(5px); }
+      }
+      .animate-shake { animation: shake 0.2s ease-in-out; }
+
+      @keyframes swing {
+        0% { transform: rotate(25deg); }
+        50% { transform: rotate(-40deg); }
+        100% { transform: rotate(25deg); }
+      }
+      .animate-swing {
+        transform-origin: bottom right;
+        animation: swing 1s ease-in-out infinite;
+      }
+
+      @keyframes fly-out {
+          0% {
+              transform: translate(0, 0) scale(1);
+              opacity: 1;
+          }
+          100% {
+              transform: translate(var(--vx), var(--vy)) scale(0);
+              opacity: 0;
+          }
+      }
+      .particle {
+          animation: fly-out 0.8s ease-out forwards;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "react": "https://esm.sh/react@^19.1.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "react-icons/": "https://esm.sh/react-icons@^5.5.0/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-gray-900 text-white">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
