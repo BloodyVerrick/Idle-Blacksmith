@@ -37,13 +37,23 @@ export interface Item {
   tier: number;
 }
 
+export interface PlayerStats {
+  totalClicks: number;
+  totalGoldEarned: number;
+  totalGoldSpent: number;
+  itemsCrafted: Record<string, number>;
+  itemsSold: Record<string, number>;
+  goldFromItems: Record<string, number>;
+}
+
 export interface Upgrade {
   id: string;
   name: string;
   description: string;
-  cost: number;
+  cost: number | ((currentTier: number) => number);
   prereq?: string;
   repeatable?: boolean;
+  maxTiers?: number;
   apply: (state: GameState) => GameState;
   icon: React.ReactNode;
 }
@@ -59,9 +69,11 @@ export interface GameState {
   upgrades: Record<string, number>; // Changed to number for repeatable upgrades
   forgeSpeedMultiplier: number;
   sellPriceMultiplier: number;
-  forgedItemsCount: Record<string, number>;
   miningProgress: Record<OreType, number>;
   highestPickaxeTier: number;
+  lastActiveTime: number; // For offline progress
+  lastSaveTime: number; // For offline progress
+  stats: PlayerStats;
 }
 
 export interface ClickData {

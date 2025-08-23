@@ -1,4 +1,3 @@
-
 import { useReducer, Reducer } from 'react';
 import { GameState, OreType, Item, ItemCategory } from '../types';
 import { UPGRADES, ITEMS, ORE_TIERS } from '../constants';
@@ -16,9 +15,18 @@ const getInitialState = (): GameState => {
         upgrades: {},
         forgeSpeedMultiplier: 1,
         sellPriceMultiplier: 1,
-        forgedItemsCount: {},
+        stats: {
+            totalClicks: 0,
+            totalGoldEarned: 0,
+            totalGoldSpent: 0,
+            itemsCrafted: {},
+            itemsSold: {},
+            goldFromItems: {},
+        },
         miningProgress: Object.values(OreType).reduce((acc, ore) => ({ ...acc, [ore]: 0 }), {} as Record<OreType, number>),
         highestPickaxeTier: -1,
+        lastActiveTime: Date.now(),
+        lastSaveTime: Date.now(),
     };
 
     if (savedState) {
@@ -31,8 +39,20 @@ const getInitialState = (): GameState => {
                 if (parsed.inventory?.tinPickaxe) {
                     delete parsed.inventory.tinPickaxe;
                 }
-                if (parsed.forgedItemsCount?.tinPickaxe) {
-                    delete parsed.forgedItemsCount.tinPickaxe;
+                // MIGRATION: from forgedItemsCount to stats.itemsCrafted
+                if (parsed.forgedItemsCount) {
+                    if (!parsed.stats) {
+                        parsed.stats = { totalClicks: 0, totalGoldEarned: 0, totalGoldSpent: 0, itemsCrafted: {}, itemsSold: {}, goldFromItems: {} };
+                    }
+                    parsed.stats.itemsCrafted = { ...parsed.stats.itemsCrafted, ...parsed.forgedItemsCount };
+                    delete parsed.forgedItemsCount;
+                }
+
+                if (parsed.inventory?.tinPickaxe) {
+                    delete parsed.inventory.tinPickaxe;
+                }
+                if (parsed.stats?.itemsCrafted?.tinPickaxe) {
+                    delete parsed.stats.itemsCrafted.tinPickaxe;
                 }
                 
                 // MIGRATION: Update 'betterAnvil' to 'Mystical Anvil' logic
@@ -46,15 +66,15 @@ const getInitialState = (): GameState => {
                     parsed.inventory.adamantiteChestplate = (parsed.inventory.adamantiteChestplate || 0) + parsed.inventory.adamantitePlate;
                     delete parsed.inventory.adamantitePlate;
                 }
-                if (parsed.forgedItemsCount?.adamantitePlate) {
-                    parsed.forgedItemsCount.adamantiteChestplate = (parsed.forgedItemsCount.adamantiteChestplate || 0) + parsed.forgedItemsCount.adamantitePlate;
-                    delete parsed.forgedItemsCount.adamantitePlate;
+                if (parsed.stats?.itemsCrafted?.adamantitePlate) {
+                    parsed.stats.itemsCrafted.adamantiteChestplate = (parsed.stats.itemsCrafted.adamantiteChestplate || 0) + parsed.stats.itemsCrafted.adamantitePlate;
+                    delete parsed.stats.itemsCrafted.adamantitePlate;
                 }
                 
                 // MIGRATION: Add highestPickaxeTier and miningProgress
                 if (parsed.highestPickaxeTier === undefined) {
                     let maxTier = -1;
-                    const itemsToCheck = parsed.forgedItemsCount || {};
+                    const itemsToCheck = parsed.stats?.itemsCrafted || {};
                     for (const itemId in itemsToCheck) {
                         if (itemId.includes('Pickaxe')) {
                             const item = ITEMS[itemId];
@@ -67,6 +87,16 @@ const getInitialState = (): GameState => {
                 }
                 if (parsed.miningProgress === undefined) {
                     parsed.miningProgress = Object.values(OreType).reduce((acc, ore) => ({ ...acc, [ore]: 0 }), {} as Record<OreType, number>);
+                }
+                if (parsed.lastActiveTime === undefined) {
+                    parsed.lastActiveTime = Date.now();
+                }
+
+                // MIGRATION: Add stats object if it doesn't exist
+                if (!parsed.stats) {
+                    parsed.stats = defaultState.stats;
+                } else {
+                    parsed.stats = { ...defaultState.stats, ...parsed.stats };
                 }
 
 
@@ -130,6 +160,7 @@ export enum GameActionType {
     FORGE_ALL_ITEMS,
     SELL_ALL_ITEMS,
     SWITCH_ORE_TIER,
+    APPLY_OFFLINE_PROGRESS,
     RESET_GAME
 }
 
@@ -142,11 +173,39 @@ export type GameAction =
     | { type: GameActionType.FORGE_ALL_ITEMS, payload: { itemId: string } }
     | { type: GameActionType.SELL_ALL_ITEMS, payload: { itemId: string } }
     | { type: GameActionType.SWITCH_ORE_TIER, payload: { direction: 'up' | 'down' } }
+    | { type: GameActionType.APPLY_OFFLINE_PROGRESS, payload: { oresGained: Record<string, number> } }
     | { type: GameActionType.RESET_GAME };
 
 const gameStateReducer: Reducer<GameState, GameAction> = (state, action): GameState => {
     switch (action.type) {
-        case GameActionType.MINE_ORE:
+        case GameActionType.MINE_ORE: {
+            const currentOre = ORE_TIERS[state.currentOreTier];
+            const clicksRequired = Math.max(1, 2 ** (state.currentOreTier - state.highestPickaxeTier));
+            const newProgress = (state.miningProgress[currentOre] || 0) + 1;
+            const newStats = { ...state.stats, totalClicks: state.stats.totalClicks + 1 };
+
+            if (newProgress >= clicksRequired) {
+                const newOres = {
+                    ...state.ores,
+                    [currentOre]: state.ores[currentOre] + state.orePerClick,
+                };
+                if (Math.random() < 0.15 && currentOre !== OreType.COAL) {
+                    newOres[OreType.COAL] = (newOres[OreType.COAL] || 0) + 1;
+                }
+                return {
+                    ...state,
+                    ores: newOres,
+                    miningProgress: { ...state.miningProgress, [currentOre]: 0 },
+                    stats: newStats,
+                };
+            } else {
+                return {
+                    ...state,
+                    miningProgress: { ...state.miningProgress, [currentOre]: newProgress },
+                    stats: newStats,
+                };
+            }
+        }
         case GameActionType.AUTO_MINE: {
             const currentOre = ORE_TIERS[state.currentOreTier];
             const clicksRequired = Math.max(1, 2 ** (state.currentOreTier - state.highestPickaxeTier));
@@ -177,42 +236,47 @@ const gameStateReducer: Reducer<GameState, GameAction> = (state, action): GameSt
         case GameActionType.BUY_UPGRADE: {
             const { upgradeId } = action.payload;
             const upgrade = UPGRADES[upgradeId];
-            if (!upgrade) {
-                return state;
+            const currentTier = state.upgrades[upgradeId] || 0;
+
+            // Pre-purchase validation
+            if (upgrade.prereq && !(state.upgrades[upgrade.prereq] > 0)) {
+                return state; // Prerequisite not met
             }
-            
-            const currentLevel = state.upgrades[upgradeId] || 0;
-            let cost = upgrade.cost;
-            if (upgrade.repeatable) {
-                if (upgrade.id === 'reinforcedPicks') {
-                     cost = upgrade.cost * Math.pow(2, currentLevel);
-                } else {
-                    cost = Math.floor(upgrade.cost * Math.pow(1.15, currentLevel));
-                }
+            if (!upgrade.repeatable && currentTier > 0) {
+                return state; // Already purchased
             }
+            if (upgrade.id === 'reinforcedPicks' && currentTier >= 3) {
+                return state; // Max level reached
+            }
+             if (upgrade.id === 'offlineMining' && currentTier >= 5) {
+                return state; // Max level for offline mining
+            }
+
+            const cost = typeof upgrade.cost === 'function' ? upgrade.cost(currentTier) : upgrade.cost;
 
             if (state.gold < cost) {
-                return state;
-            }
-            
-            if (upgrade.id === 'reinforcedPicks' && currentLevel >= 3) {
-                 return state; // Max level reached
+                return state; // Not enough gold
             }
 
-            if (!upgrade.repeatable && currentLevel > 0) {
-                return state; // Already purchased non-repeatable
-            }
-            
-            if (upgrade.prereq && !(state.upgrades[upgrade.prereq] > 0)) {
-                 return state; // Prerequisite not met
-            }
-
-            const newState = {
+            // Purchase logic
+            const newUpgrades = { ...state.upgrades, [upgradeId]: currentTier + 1 };
+            const newStats = { ...state.stats, totalGoldSpent: state.stats.totalGoldSpent + cost };
+            let newState = {
                 ...state,
                 gold: state.gold - cost,
-                upgrades: { ...state.upgrades, [upgradeId]: currentLevel + 1 },
+                upgrades: newUpgrades,
+                stats: newStats,
             };
-            return upgrade.apply(newState);
+
+            // Apply the upgrade's primary effect
+            newState = upgrade.apply(newState);
+
+            // Handle specific aggregated effects
+            if (upgrade.id === 'miner') {
+                newState.autoMinerRate = newUpgrades.miner;
+            }
+
+            return newState;
         }
         case GameActionType.FORGE_ITEM:
         case GameActionType.FORGE_ALL_ITEMS: {
@@ -280,7 +344,13 @@ const gameStateReducer: Reducer<GameState, GameAction> = (state, action): GameSt
 
             newInventory[itemId] = (newInventory[itemId] || 0) + itemsToAdd;
 
-            const newForgedItemsCount = { ...state.forgedItemsCount, [itemId]: (state.forgedItemsCount[itemId] || 0) + itemsToAdd};
+            const newStats = {
+                ...state.stats,
+                itemsCrafted: {
+                    ...state.stats.itemsCrafted,
+                    [itemId]: (state.stats.itemsCrafted[itemId] || 0) + itemsToAdd
+                }
+            };
 
             // Check for new highest tier pickaxe
             let newHighestPickaxeTier = state.highestPickaxeTier;
@@ -295,7 +365,7 @@ const gameStateReducer: Reducer<GameState, GameAction> = (state, action): GameSt
                 ...state,
                 ores: newOres,
                 inventory: newInventory,
-                forgedItemsCount: newForgedItemsCount,
+                stats: newStats,
                 highestPickaxeTier: newHighestPickaxeTier,
                 miningProgress: newMiningProgress,
             };
@@ -314,11 +384,18 @@ const gameStateReducer: Reducer<GameState, GameAction> = (state, action): GameSt
             }
 
             const goldEarned = Math.round(item.sellPrice * state.sellPriceMultiplier);
+            const newStats = {
+                ...state.stats,
+                totalGoldEarned: state.stats.totalGoldEarned + goldEarned,
+                itemsSold: { ...state.stats.itemsSold, [itemId]: (state.stats.itemsSold[itemId] || 0) + 1 },
+                goldFromItems: { ...state.stats.goldFromItems, [itemId]: (state.stats.goldFromItems[itemId] || 0) + goldEarned },
+            };
 
             return {
                 ...state,
                 inventory: newInventory,
-                gold: state.gold + goldEarned
+                gold: state.gold + goldEarned,
+                stats: newStats,
             };
         }
         case GameActionType.SELL_ALL_ITEMS: {
@@ -334,11 +411,18 @@ const gameStateReducer: Reducer<GameState, GameAction> = (state, action): GameSt
             delete newInventory[itemId];
 
             const goldEarned = Math.round(item.sellPrice * state.sellPriceMultiplier * quantity);
+            const newStats = {
+                ...state.stats,
+                totalGoldEarned: state.stats.totalGoldEarned + goldEarned,
+                itemsSold: { ...state.stats.itemsSold, [itemId]: (state.stats.itemsSold[itemId] || 0) + quantity },
+                goldFromItems: { ...state.stats.goldFromItems, [itemId]: (state.stats.goldFromItems[itemId] || 0) + goldEarned },
+            };
 
             return {
                 ...state,
                 inventory: newInventory,
-                gold: state.gold + goldEarned
+                gold: state.gold + goldEarned,
+                stats: newStats,
             };
         }
         case GameActionType.SWITCH_ORE_TIER: {
@@ -351,6 +435,13 @@ const gameStateReducer: Reducer<GameState, GameAction> = (state, action): GameSt
                 newTier++;
             }
             return { ...state, currentOreTier: newTier };
+        }
+        case GameActionType.APPLY_OFFLINE_PROGRESS: {
+            const newOres = { ...state.ores };
+            for (const ore in action.payload.oresGained) {
+                newOres[ore as OreType] = (newOres[ore as OreType] || 0) + action.payload.oresGained[ore];
+            }
+            return { ...state, ores: newOres };
         }
         case GameActionType.RESET_GAME:
             localStorage.removeItem('blacksmithGameState');

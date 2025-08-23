@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { GameState, ClickData, OreType } from '../types';
-import { ORE_TIERS, ORE_ICONS } from '../constants';
-import ClickNumber from './ClickNumber';
-import { GiStoneAxe, GiLightningFrequency, GiStairs } from 'react-icons/gi';
-import { FaArrowUp, FaArrowDown } from 'react-icons/fa';
+import { GameState, ClickData, OreType } from '@/types';
+import { ORE_TIERS, ORE_ICONS } from '@/constants';
+import ClickNumber from '@/components/ClickNumber';
+import { GiStoneAxe, GiLightningFrequency } from 'react-icons/gi';
+import TierSwitchButton from './TierSwitchButton';
 
 interface MiningScreenProps {
     gameState: GameState;
@@ -17,6 +17,11 @@ interface ParticleData {
   y: number;
 }
 
+const MAX_CLICK_ANIMATIONS = 15;
+const MAX_PARTICLES = 50;
+const ANIMATION_THROTTLE_MS = 100;
+const SHAKE_DURATION_MS = 200;
+
 const MiningScreen: React.FC<MiningScreenProps> = ({ gameState, onMine, onSwitchTier }) => {
     const [clicks, setClicks] = useState<ClickData[]>([]);
     const [nextClickId, setNextClickId] = useState(0);
@@ -25,6 +30,7 @@ const MiningScreen: React.FC<MiningScreenProps> = ({ gameState, onMine, onSwitch
     const [nextParticleId, setNextParticleId] = useState(0);
     const playerClickTimestampsRef = useRef<number[]>([]);
     const [totalCps, setTotalCps] = useState('0.0');
+    const lastAnimationTimeRef = useRef(0);
 
     const currentOreType = ORE_TIERS[gameState.currentOreTier];
     const prevOresRef = useRef(gameState.ores);
@@ -45,16 +51,23 @@ const MiningScreen: React.FC<MiningScreenProps> = ({ gameState, onMine, onSwitch
         const oreGained = Math.floor(gameState.ores[currentOreType]) - Math.floor(prevOresRef.current[currentOreType] || 0);
         const coalGained = Math.floor(gameState.ores[OreType.COAL]) - Math.floor(prevOresRef.current[OreType.COAL] || 0);
 
+        const now = Date.now();
+        if (now - lastAnimationTimeRef.current < ANIMATION_THROTTLE_MS) { // Throttle animations
+            prevOresRef.current = gameState.ores;
+            return;
+        }
+
         if ((oreGained > 0 || coalGained > 0) && lastClickCoordsRef.current) {
+            lastAnimationTimeRef.current = now;
             if (oreGained > 0) {
                 const newClick: ClickData = { id: nextClickId, x: lastClickCoordsRef.current.x, y: lastClickCoordsRef.current.y, value: `+${oreGained}` };
-                setClicks(currentClicks => [...currentClicks, newClick]);
+                setClicks(currentClicks => [...currentClicks, newClick].slice(-MAX_CLICK_ANIMATIONS));
                 setNextClickId(prev => prev + 1);
             }
              if (coalGained > 0) {
                 // Offset coal to not overlap
                 const newClick: ClickData = { id: nextClickId + 10000, x: lastClickCoordsRef.current.x + 15, y: lastClickCoordsRef.current.y + 15, value: `+${coalGained} Coal` };
-                 setClicks(currentClicks => [...currentClicks, newClick]);
+                 setClicks(currentClicks => [...currentClicks, newClick].slice(-MAX_CLICK_ANIMATIONS));
                 setNextClickId(prev => prev + 1);
             }
             
@@ -65,11 +78,11 @@ const MiningScreen: React.FC<MiningScreenProps> = ({ gameState, onMine, onSwitch
                 y: lastClickCoordsRef.current!.y,
             }));
             setNextParticleId(prev => prev + newParticles.length);
-            setParticles(current => [...current, ...newParticles]);
+            setParticles(current => [...current, ...newParticles].slice(-MAX_PARTICLES));
         }
 
         prevOresRef.current = gameState.ores;
-    }, [gameState.ores, currentOreType, nextClickId, nextParticleId]);
+    }, [gameState.ores, currentOreType]);
 
     const handleOreClick = (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
         onMine();
@@ -83,7 +96,7 @@ const MiningScreen: React.FC<MiningScreenProps> = ({ gameState, onMine, onSwitch
         // Shake effect
         if (!shake) {
           setShake(true);
-          setTimeout(() => setShake(false), 200);
+          setTimeout(() => setShake(false), SHAKE_DURATION_MS);
         }
     };
 
@@ -131,28 +144,20 @@ const MiningScreen: React.FC<MiningScreenProps> = ({ gameState, onMine, onSwitch
             >
                  {/* Go Up button */}
                 {gameState.currentOreTier > 0 && (
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onSwitchTier('up'); }}
-                        className="absolute z-10 -left-20 sm:-left-24 top-1/2 -translate-y-1/2 flex flex-col items-center p-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-all text-gray-300 hover:text-white transform hover:scale-105"
-                        aria-label="Go to previous mine level"
-                    >
-                        <FaArrowUp className="text-2xl" />
-                        <GiStairs className="text-4xl my-1" />
-                        <span className="text-xs font-bold whitespace-nowrap">{ORE_TIERS[gameState.currentOreTier - 1]}</span>
-                    </button>
+                    <TierSwitchButton 
+                        direction="up" 
+                        onClick={() => onSwitchTier('up')} 
+                        oreName={ORE_TIERS[gameState.currentOreTier - 1]} 
+                    />
                 )}
 
                 {/* Go Down button */}
                 {gameState.currentOreTier < gameState.maxOreTier && (
-                     <button 
-                        onClick={(e) => { e.stopPropagation(); onSwitchTier('down'); }}
-                        className="absolute z-10 -right-20 sm:-right-24 top-1/2 -translate-y-1/2 flex flex-col items-center p-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-all text-gray-300 hover:text-white transform hover:scale-105"
-                        aria-label="Go to next mine level"
-                    >
-                        <span className="text-xs font-bold whitespace-nowrap">{ORE_TIERS[gameState.currentOreTier + 1]}</span>
-                        <GiStairs className="text-4xl my-1" />
-                        <FaArrowDown className="text-2xl" />
-                    </button>
+                    <TierSwitchButton 
+                        direction="down" 
+                        onClick={() => onSwitchTier('down')} 
+                        oreName={ORE_TIERS[gameState.currentOreTier + 1]} 
+                    />
                 )}
 
                 {/* Progress Bar */}

@@ -1,7 +1,7 @@
 import React from 'react';
-import { GameState, OreType, Item, ItemCategory } from '../types';
-import { GameAction } from '../hooks/useGameState';
-import { ITEMS, ORE_TIERS } from '../constants';
+import { GameState, OreType, Item, ItemCategory } from '@/types';
+import { GameAction } from '@/hooks/useGameState';
+import { ITEMS } from '@/constants';
 
 interface ForgeScreenProps {
     gameState: GameState;
@@ -34,25 +34,17 @@ const ItemCard: React.FC<{
 }> = ({ item, gameState, onForge, onForgeAll }) => {
     const recipe = getEffectiveRecipe(item, gameState);
     
-    const canForge = Object.entries(recipe).every(([resourceId, required]) => {
-        const isOre = Object.values(OreType).includes(resourceId as OreType);
-        if (isOre) {
-            return (gameState.ores[resourceId as OreType] || 0) >= (required as number);
-        } else {
-            return (gameState.inventory[resourceId] || 0) >= (required as number);
-        }
-    });
-
-    const forgeableAmount = canForge ? Math.min(
+    const forgeableAmount = Math.min(
         ...Object.entries(recipe).map(([resourceId, required]) => {
             const isOre = Object.values(OreType).includes(resourceId as OreType);
-            if (isOre) {
-                return Math.floor((gameState.ores[resourceId as OreType] || 0) / (required as number));
-            } else {
-                return Math.floor((gameState.inventory[resourceId] || 0) / (required as number));
-            }
+            const available = isOre
+                ? (gameState.ores[resourceId as OreType] || 0)
+                : (gameState.inventory[resourceId] || 0);
+            return Math.floor(available / (required as number));
         })
-    ) : 0;
+    );
+
+    const canForge = forgeableAmount > 0;
 
     return (
         <div key={item.id} className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 flex flex-col justify-between text-left">

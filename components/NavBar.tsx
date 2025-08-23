@@ -1,13 +1,15 @@
 
 import React from 'react';
-import { Screen, GameState, OreType } from '../types';
-import { ORE_ICONS, ORE_TIERS } from '../constants';
+import { Screen, GameState, OreType } from '@/types';
+import { ORE_ICONS, ORE_TIERS } from '@/constants';
+import { formatNumber } from '@/utils';
 import { GiCoins } from 'react-icons/gi';
 
 interface NavBarProps {
     activeScreen: Screen;
     setActiveScreen: (screen: Screen) => void;
     gameState: GameState;
+    onShowStats: () => void;
 }
 
 const NavButton: React.FC<{
@@ -31,31 +33,37 @@ const NavButton: React.FC<{
     );
 };
 
-const NavBar: React.FC<NavBarProps> = ({ activeScreen, setActiveScreen, gameState }) => {
+const NavBar: React.FC<NavBarProps> = ({ activeScreen, setActiveScreen, gameState, onShowStats }) => {
     const currentOreType = ORE_TIERS[gameState.currentOreTier];
     const currentOreCount = gameState.ores[currentOreType];
     const coalCount = gameState.ores[OreType.COAL] || 0;
 
     return (
         <nav className="bg-gray-900/50">
-            <div className="grid grid-cols-2 sm:grid-cols-4">
+            <div className="grid grid-cols-2 sm:grid-cols-5">
                 <NavButton screen={Screen.MINING} activeScreen={activeScreen} setActiveScreen={setActiveScreen}>Mining</NavButton>
                 <NavButton screen={Screen.FORGE} activeScreen={activeScreen} setActiveScreen={setActiveScreen}>Forge</NavButton>
                 <NavButton screen={Screen.MARKET} activeScreen={activeScreen} setActiveScreen={setActiveScreen}>Market</NavButton>
                 <NavButton screen={Screen.UPGRADES} activeScreen={activeScreen} setActiveScreen={setActiveScreen}>Upgrades</NavButton>
+                <button
+                    onClick={onShowStats}
+                    className="px-4 py-3 text-sm sm:text-base font-bold transition-all duration-300 transform focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-opacity-50 bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white"
+                >
+                    Stats
+                </button>
             </div>
             <div className="flex justify-around items-center p-2 bg-gray-900 border-t border-b border-gray-700 text-sm sm:text-base">
                 <div className="flex items-center gap-2 font-semibold text-yellow-400">
                     <GiCoins className="w-6 h-6" />
-                    <span>{Math.floor(gameState.gold)}</span>
+                    <span>{formatNumber(gameState.gold)}</span>
                 </div>
                 <div className="flex items-center gap-2 font-semibold text-gray-300">
                     <span className="text-2xl">{ORE_ICONS[currentOreType]}</span>
-                    <span>{Math.floor(currentOreCount)} {currentOreType}</span>
+                    <span>{formatNumber(currentOreCount)} {currentOreType}</span>
                 </div>
                 <div className="flex items-center gap-2 font-semibold text-gray-300">
                     <span className="text-2xl">{ORE_ICONS[OreType.COAL]}</span>
-                    <span>{Math.floor(coalCount)} {OreType.COAL}</span>
+                    <span>{formatNumber(coalCount)} {OreType.COAL}</span>
                 </div>
             </div>
         </nav>

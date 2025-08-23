@@ -356,7 +356,19 @@ export const UPGRADES: Record<string, Upgrade> = {
         description: 'Doubles the amount of ore gained per click. Max 3 tiers.',
         cost: 2000,
         repeatable: true,
+        maxTiers: 3,
         apply: (s) => ({ ...s, orePerClick: s.orePerClick * 2 }),
+        icon: <GiPowerLightning />
+    },
+    offlineMining: {
+        id: 'offlineMining',
+        name: 'Offline Mining',
+        description: 'Earn a percentage of ores from auto-miners while offline. Max 5 tiers.',
+        cost: (currentTier) => 25000 * Math.pow(2, currentTier), // Cost doubles each tier
+        repeatable: true,
+        maxTiers: 5,
+        prereq: 'miner',
+        apply: (s) => s, // Logic is handled on game load
         icon: <GiPowerLightning />
     },
     // Ore Tier Upgrades
